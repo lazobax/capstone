@@ -13,6 +13,7 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 import os
+import sys
 
 def getDataBS(gene):
     url = f"https://databases.lovd.nl/shared/api/rest.php/variants/{gene}?search_VariantOnTranscript/Haplotype=FA"
@@ -125,14 +126,27 @@ def scrape(gene):
     df_all.to_csv(f"data/scraped/{gene}_variants_full.tsv", sep="\t", index=False)
 
 
-genes = ["FANCA", "FANCB", "FANCC", "BRCA2", "FANCD2", "FANCE",
-         "FANCF", "FANCG", "FANCI", "BRIP1", "FANCL", "FANCM",
-         "PALB2", "RAD51C", "SLX4", "ERCC4", "RAD51", "BRCA1",
-         "UBE2T", "XRCC2", "MAD2L2", "RFWD3"]
+# genes = ["FANCA", "FANCB", "FANCC", "BRCA2", "FANCD2", "FANCE",
+#          "FANCF", "FANCG", "FANCI", "BRIP1", "FANCL", "FANCM",
+#          "PALB2", "RAD51C", "SLX4", "ERCC4", "RAD51", "BRCA1",
+#          "UBE2T", "XRCC2", "MAD2L2", "RFWD3"]
 
-for gene in genes:
-    try:
-        df = scrape(gene)
-        print(f"Data for {gene} retrieved successfully.")
-    except Exception as e:
-        print(f"Error retrieving data for {gene}: {e}")
+if len(sys.argv) > 1:
+    gene = sys.argv[1]
+else:
+    gene = None
+    print("No gene specified, exiting.")
+    sys.exit(1)
+
+# for gene in genes:
+#     try:
+#         df = scrape(gene)
+#         print(f"Data for {gene} retrieved successfully.")
+#     except Exception as e:
+#         print(f"Error retrieving data for {gene}: {e}")
+
+try:
+    df = scrape(gene)
+    print(f"Data for {gene} retrieved successfully.")
+except Exception as e:  
+    print(f"Error retrieving data for {gene}: {e}")

@@ -1,0 +1,15 @@
+name: reproduceCapstone
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python
+  - pandas
+  - requests
+  - beautifulsoup4
+  - lxml
+  - hgvs
+  - bioutils
+  - pysam
+  - samtools

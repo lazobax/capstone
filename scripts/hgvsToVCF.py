@@ -90,8 +90,6 @@ if __name__ == "__main__":
     hp = hgvs.parser.Parser()
 
 
-
-
     df = pd.read_csv(input_tsv, sep="\t", header=None)
     failed = []
     vcf_entries = []

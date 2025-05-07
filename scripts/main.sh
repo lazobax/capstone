@@ -30,6 +30,6 @@ alias python='~/miniforge3/envs/hgvs/bin/python'
 for gene in "${!gene_chr[@]}"; do
     chr_num="${gene_chr[$gene]}"
     grep "GRCh37" data/variant_summary.tsv | grep "${gene}" | cut -f 2,7,19,26,32,33,34 | awk -F'\t' -v OFS='\t' '{print $3, $5, $6, $7, $1, $2, $4}' > data/ClinVar_vcf/${gene}.vcf
-    # python scripts/parse.py -L data/scraped/${gene}_variants_full.tsv --chr ${chr_num} -o data/parsed/${gene}.tsv
-    # python scripts/hgvsToVCF.py "GRCh37" data/parsed/${gene}.tsv 
+    python scripts/parse.py -L data/scraped/${gene}_variants_full.tsv --chr ${chr_num} -o data/parsed/${gene}.tsv
+    python scripts/hgvsToVCF.py "GRCh37" data/parsed/${gene}.tsv 
 done

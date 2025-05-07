@@ -28,9 +28,15 @@ declare -A gene_chr=(
     ["RFWD3"]="16"
 )
 
+mkdir data
+mkdir data/scraped data/ClinVar_vcf/
+mkdir data/parsed/
+mkdir data/LOVD_vcf
+
 ```
 
 ## Get ClinVar datasets. 
+for each gene do:
 ```
 wget https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz
 gunzip variant_summary.txt.gz
@@ -42,3 +48,10 @@ grep "GRCh37" data/variant_summary.tsv |\
 ```
 
 ## Scrape LOVD data
+for each gene do:
+
+```
+python3 get.py ${gene}
+python scripts/parse.py -L data/scraped/${gene}_variants_full.tsv --chr ${chr_num} -o data/parsed/${gene}.tsv
+python scripts/hgvsToVCF.py "GRCh37" data/parsed/${gene}.tsv  
+```
