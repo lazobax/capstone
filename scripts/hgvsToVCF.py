@@ -74,7 +74,7 @@ if __name__ == "__main__":
     from functools import lru_cache
 
     # 1) open your local FASTA once
-    fasta = pysam.FastaFile("/home/lazo_ozal/capstone/genome.fa")
+    fasta = pysam.FastaFile("data/genome.fa")
 
     # 2) cache every fetch to avoid repeated I/O
     @lru_cache(maxsize=None)
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         try:
             var_g = hp.parse_hgvs_variant(hgvs_str)
             chrom, pos, ref, alt, typ = bf.hgvs_to_vcf(var_g)
-            print(chrom, pos, ref, alt, typ )
+            # print(chrom, len(pos), ref, alt, typ )
             vcf_entries.append([chrom, pos, ref, alt,typ, ID, CONSEQ, REPORTED])
         except Exception as e:
             failed.append(hgvs_str)

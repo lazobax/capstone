@@ -35,7 +35,7 @@ else
 fi
 
 # Create directories
-mkdir -p data data/scraped data/parsed data/BSData data/ClinVar_vcf data/LOVD_vcf
+mkdir -p data data/scraped data/parsed data/BSData data/ClinVar_vcf data/LOVD_vcf data/ignored/
 
 # Download and prepare ClinVar summary
 CLINVAR_URL="https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz"
@@ -67,9 +67,105 @@ for gene in "${GENES[@]}"; do
         cut -f 2,7,19,26,32,33,34 | \
         awk -F'\t' -v OFS='\t' '{print $3, $5, $6, $7, $1, $2, $4}' \
         > "data/ClinVar_vcf/${gene}.vcf"
+    python3 scripts/addClinVarID.py ${gene}.vcf
 
     # LOVD scraping and parsing
-    python3 get.py "$gene"
-    python3 parse.py -L "data/scraped/${gene}_variants_full.tsv" --chr "$chr" -o "data/parsed/${gene}.tsv"
-    python3 hgvsToVCF.py "GRCh37" "data/parsed/${gene}.tsv"
+    python3 scripts/get.py "$gene"
+    python3 scripts/fixScrape.py "$gene"_variants_full.tsv
+    python3 scripts/parse.py -L "data/scraped_adj/${gene}_variants_full.tsv" --chr "$chr" -o "data/parsed/${gene}.tsv"
+    python3 scripts/hgvsToVCF.py "GRCh37" "data/parsed/${gene}.tsv"
 done
+
+# Reformating into valid, actual, VCF format
+mkdir -P VCF_regular/CV VCF_regular/LOVD
+python3 scripts/tsvToVcf.py --indir data/ClinVar_vcf/ --outdir VCF_regular/CV/
+python3 scripts/tsvToVcf.py --indir data/LOVD_vcf/ --outdir VCF_regular/LOVD/
+
+
+# 1) Build contigs.txt from genome.fa.fai
+awk '{ printf("##contig=<ID=%s,length=%s>\n",$1,$2) }' \
+    data/genome.fa.fai > data/contigs.txt
+
+# 2) Prepare output directories
+mkdir -p VCF/LOVD VCF/CV
+
+# 3) Process every VCF in VCF_regular/LOVD and VCF_regular/CV
+for sub in LOVD CV; do
+  for in_vcf in VCF_regular/${sub}/*.vcf; do
+    base=$(basename "$in_vcf" .vcf)
+    out_vcf=VCF/${sub}/${base}.vcf
+
+    # a) Replace chr → contig names
+    python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
+
+    # b) Compress with bgzip
+    bgzip -c "$out_vcf" > "${out_vcf}.gz"
+
+    # c) Inject contig headers
+    bcftools annotate \
+      --header-lines data/contigs.txt \
+      -Oz -o "${out_vcf%.vcf}.contig.vcf.gz" \
+      "${out_vcf}.gz"
+
+    # d) Sort and re-compress
+    bcftools sort \
+      "${out_vcf%.vcf}.contig.vcf.gz" \
+      -Oz -o "${out_vcf%.vcf}.sorted.vcf.gz"
+
+    # e) Index
+    tabix -p vcf "${out_vcf%.vcf}.sorted.vcf.gz"
+  done
+done
+
+# 4) Concatenate all sorted VCFs into one uncompressed VCF
+bcftools concat -a -O v \
+  VCF/LOVD/*.sorted.vcf.gz VCF/CV/*.sorted.vcf.gz \
+  > data/combined.vcf
+
+#removes non-ATCGN bases and keeps them, non ATCGN bases are IUPAC ambiguity
+python scripts/removeIUPACambg.py
+
+# 1) bgzip & index the raw combined VCF
+bgzip -c data/combined.clean.vcf   > data/combined.clean.vcf.gz
+tabix -p vcf data/combined.clean.vcf.gz
+echo "zipped"
+
+# 2) Split multi-allelic sites into biallelic records
+bcftools norm -m -both \
+  data/combined.clean.vcf.gz \
+  -Oz -o data/combined.split.vcf.gz
+echo "normed"
+
+# 3) Left-align and trim indels against your reference
+bcftools norm -f data/genome.fa \
+  data/combined.split.vcf.gz \
+  -Oz -cw -o data/combined.normalized.vcf.gz
+echo "normed 2" 
+
+# 4) Index the normalized VCF
+tabix -p vcf data/combined.normalized.vcf.gz
+
+
+
+# Downloading ANNOVAR and the refGene, dbnsfp42a databases
+# The following take some time. Especially dbnsfp42a, it's over 40Gb unzipped. 
+wget http://www.openbioinformatics.org/annovar/download/0wgxR2rIVP/annovar.latest.tar.gz
+tar -xvzf annovar.latest.tar.gz
+perl annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene humandb/
+perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar dbnsfp42a annovar/humandb/
+
+perl annovar/table_annovar.pl \
+    data/combined.normalized.vcf.gz \
+    annovar/humandb/ \
+    -buildver hg19 \
+    -out data/combined.normalized \
+    -remove \
+    -protocol refGene,dbnsfp42a \
+    -operation g,f \
+    -nastring . \
+    -vcfinput
+
+mv data/combined.normalized.hg19_multianno.txt data/finalAnnot.tsv
+
+mkdir -p data/combined/
+mv data/combined.* data/combined/ 

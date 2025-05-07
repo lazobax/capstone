@@ -45,6 +45,7 @@ grep "GRCh37" data/variant_summary.tsv |\
              cut -f 2,7,19,26,32,33,34 |\
              awk -F'\t' -v OFS='\t' '{print $3, $5, $6, $7, $1, $2, $4}'\
              > data/ClinVar_vcf/${gene}.vcf
+python3 scripts/addClinVarID.py
 ```
 
 ## Scrape LOVD data
@@ -55,3 +56,4 @@ python3 get.py ${gene}
 python scripts/parse.py -L data/scraped/${gene}_variants_full.tsv --chr ${chr_num} -o data/parsed/${gene}.tsv
 python scripts/hgvsToVCF.py "GRCh37" data/parsed/${gene}.tsv  
 ```
+
