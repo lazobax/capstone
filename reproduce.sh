@@ -96,7 +96,7 @@ for sub in LOVD CV; do
     out_vcf=VCF/${sub}/${base}.vcf
 
     # a) Replace chr → contig names
-    python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
+    # python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
 
     # b) Compress with bgzip
     bgzip -c "$out_vcf" > "${out_vcf}.gz"
@@ -104,6 +104,7 @@ for sub in LOVD CV; do
     # c) Inject contig headers
     bcftools annotate \
       --header-lines data/contigs.txt \
+      --rename-chrs utils/num2acc.txt \
       -Oz -o "${out_vcf%.vcf}.contig.vcf.gz" \
       "${out_vcf}.gz"
 
@@ -154,8 +155,13 @@ tar -xvzf annovar.latest.tar.gz
 perl annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene humandb/
 perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar dbnsfp42a annovar/humandb/
 
+bcftools annotate \
+      --rename-chrs utils/acc2num.txt \
+      -Oz -o data/combined.normalized.vcf.gz \
+      combined.normalized.num.vcf.gz
+
 perl annovar/table_annovar.pl \
-    data/combined.normalized.vcf.gz \
+    data/combined.normalized.num.vcf.gz \
     annovar/humandb/ \
     -buildver hg19 \
     -out data/combined.normalized \
