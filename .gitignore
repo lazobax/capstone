@@ -1,0 +1,7 @@
+annovar/
+data/
+plots*/
+VCF/
+An*.pdf
+*.vcf
+*chain
