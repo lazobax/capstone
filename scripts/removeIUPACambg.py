@@ -32,7 +32,16 @@ def main():
 
             cols = line.rstrip('\n').split('\t')
             chrom = cols[0]
-            pos = int(cols[1])
+            # Validate POS is a positive integer
+            try:
+                pos = int(cols[1])
+            except ValueError:
+                fout_err.write(line)
+                continue
+            if pos < 1:
+                fout_err.write(line)
+                continue
+
             ref = cols[3]
             alts = cols[4].split(',')
 
@@ -56,7 +65,7 @@ def main():
                 fout_good.write(line)
 
     print(f"Clean VCF written to: {clean_vcf}")
-    print(f"Non-standard records in: {error_vcf}")
+    print(f"Non-standard or negative-pos records in: {error_vcf}")
     print(f"Reference mismatches in: {mismatch_vcf}")
 
 if __name__ == '__main__':

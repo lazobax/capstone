@@ -77,7 +77,7 @@ for gene in "${GENES[@]}"; do
 done
 
 # Reformating into valid, actual, VCF format
-mkdir -P VCF_regular/CV VCF_regular/LOVD
+mkdir -p VCF_regular/CV VCF_regular/LOVD
 python3 scripts/tsvToVcf.py --indir data/ClinVar_vcf/ --outdir VCF_regular/CV/
 python3 scripts/tsvToVcf.py --indir data/LOVD_vcf/ --outdir VCF_regular/LOVD/
 
@@ -96,7 +96,7 @@ for sub in LOVD CV; do
     out_vcf=VCF/${sub}/${base}.vcf
 
     # a) Replace chr → contig names
-    # python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
+    python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
 
     # b) Compress with bgzip
     bgzip -c "$out_vcf" > "${out_vcf}.gz"
@@ -152,13 +152,14 @@ tabix -p vcf data/combined.normalized.vcf.gz
 # The following take some time. Especially dbnsfp42a, it's over 40Gb unzipped. 
 wget http://www.openbioinformatics.org/annovar/download/0wgxR2rIVP/annovar.latest.tar.gz
 tar -xvzf annovar.latest.tar.gz
-perl annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene humandb/
+perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene annovar/humandb/
 perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar dbnsfp42a annovar/humandb/
 
 bcftools annotate \
       --rename-chrs utils/acc2num.txt \
-      -Oz -o data/combined.normalized.vcf.gz \
-      combined.normalized.num.vcf.gz
+      -Oz -o data/combined.normalized.num.vcf.gz \
+      data/combined.normalized.vcf.gz
+
 
 perl annovar/table_annovar.pl \
     data/combined.normalized.num.vcf.gz \
