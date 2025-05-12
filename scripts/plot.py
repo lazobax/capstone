@@ -75,7 +75,7 @@ def collapse_pos(p, segments, total_width):
 # ———————————————————————————————————————————
 
 # 0) load & pre-filter merged_df only once
-merged_tsv = "merged_df2.tsv"
+merged_tsv = "merged.tsv"
 df_all = pd.read_csv(merged_tsv, sep='\t', comment='#')
 df_all = df_all[
     (df_all['Func.refGene']=='exonic') &
@@ -91,7 +91,7 @@ intron_shrink = 100
 alpha         = 0.15
 marker_size   = 6
 gff_path      = "data/GRCh37.gff"
-output_dir    = "plots2"
+output_dir    = "plots3"
 
 genes = ["FANCA","FANCB","FANCC","BRCA2","FANCD2","FANCE",
          "FANCF","FANCG","FANCI","BRIP1","FANCL","FANCM",
