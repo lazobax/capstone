@@ -31,7 +31,8 @@ The final result is a unified dataset of 91,720 GRCh37-mapped variants with harm
 │   ├── normVCF.sh          # bcftools-based VCF normalization
 │   ├── label.py            # Map consequence strings to pathogenic/benign/VUS
 │   ├── plot.py             # Visualization of mutation distributions
-├── capstone.ipynb          # Final analysis and figures (Jupyter)
+|   ├── capstone.ipynb          # Final analysis and figures (Jupyter)
+├── reqs.yaml               # environment requirements
 ├── reproduce.sh            # One-line reproducibility script
 ├── README.md               # You are here
 ```
@@ -101,5 +102,5 @@ If you use this pipeline or dataset, please cite:
 ## 📬 Contact
 
 For questions or collaborations, please contact:
-📧 [lazo.bakhtiar@lau.edu.lb](mailto:lazo.bakhtiar@lau.edu.lb)
+📧 [lazo.bakhtiar@lau.edu.lb](mailto:lazo.ali@lau.edu)
 
