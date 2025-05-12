@@ -1,45 +1,105 @@
-# Capstone Project
+# A Bioinformatics Overview of Publicly Available Fanconi Anemia Mutation Data
 
-# Data
+**Author:** Lazo B. Ali
+**Supervisor:** Dr. Joseph Rebehmed
+**Institution:** Lebanese American University, Department of Computer Science and Mathematics
 
-+ `data/api` contains data retreived through the LOVD api
-+ `data/scraped` contains data retreived through webscraping the LOVD
-+ `data/variant_summary.tsv` contains comprehensive ClinVar data, summarized, retreived from ncbi's ftp server
-+ `data/GRCh37.gff` is the latest annotation of the GRCh37 asssembly.
+## 📘 Overview
 
-# Scripts
+This project systematically integrates and analyzes mutation data related to **Fanconi Anemia (FA)** from two major public resources:
 
-- The `get.py` script retrieves genetic variant data from the LOVD database using three main functions:
+* **LOVD3 (Leiden Open Variation Database)**
+* **NCBI ClinVar**
 
-  + `getDataBS(gene)`: Scrapes XML data with BeautifulSoup, extracts fields, and saves as a TSV file in data/BSData.
+Despite nominal adherence to ACMG/AMP guidelines by both databases, inconsistencies in transcript versions, annotation formats, and classification schemes complicate cross-database meta-analysis. This pipeline resolves those issues through data normalization, conversion to VCF, annotation with ANNOVAR, and downstream analysis.
 
-  + `getData(gene)`: Parses XML data with xml.etree.ElementTree, extracts fields, and saves as a TSV file in data.
+The final result is a unified dataset of 91,720 GRCh37-mapped variants with harmonized pathogenicity assertions and functional scores.
 
-  + `scrape(gene)`: Scrapes paginated HTML tables using pandas.read_html, combines results, logs incomplete pages, and saves as a TSV file in data/scraped.
-      + **FINAL ONE USED!!!!**
+---
 
-- The `parse.py` script processes and merges two TSV files `-C` from the CinVar data and `-L` from the LOVD data and merges them. It tries to extract HGVS standard notation for each variation.
+## 📂 Repository Structure
 
-  + `format_contig(chrom)`: gets you from a chromosome number into a standardized contig format (16 $\to$ NC_000016.9) based on GCh37.
+```
+├── scripts/                # All processing and analysis scripts
+│   ├── get.py              # Scraper for LOVD variant tables
+│   ├── fixScrape.py        # Fix inconsistent LOVD headers
+│   ├── parse.py            # Extract and normalize LOVD coordinates
+│   ├── hgvsToVCF.py        # Convert HGVS to VCF using Biocommons
+│   ├── tsvToVcf.py         # Convert TSVs to basic VCF
+│   ├── removeIUPACambg.py  # Filter malformed or ambiguous variants
+│   ├── replaceCHROM.py     # Replace CHROM with GRCh37 contig names
+│   ├── normVCF.sh          # bcftools-based VCF normalization
+│   ├── label.py            # Map consequence strings to pathogenic/benign/VUS
+│   ├── plot.py             # Visualization of mutation distributions
+├── capstone.ipynb          # Final analysis and figures (Jupyter)
+├── reproduce.sh            # One-line reproducibility script
+├── README.md               # You are here
+```
 
-  + `process_c_file(path, contig, ignored_writer)`:
-    + Extracts transcript and transcript HGVS data, assigns unique `CV#####` IDs, and logs invalid rows to an ignored file.
-    + Returns mutation relative to transcript in genomic context. 
-    + **THIS IS NO LONGER USEFUL!!!**
-  + `process_l_file(path, contig, ignored_writer)`:
-    + Extracts genomic coordinate of LOVD mutation data, assigns unique `LOVD#####` IDs, and logs invalid rows to an ignored file.
-    + Returns mutations relative to chromosome in the hg17/Ch37 assembly. Since the transcripts the mutations are reported on are not always the RefSeq latest version.  
+---
 
-- The `find.sh` script takes a gtf file, coordinate, and chromosome number and returns all features that contain that coordinate on that chromosome.
+## 🔧 How to Run
 
-- The `validateMutalyzer.py` script attempts to noramlize hgvs notation using mutalizer checking if any fail. **CAN NOT USE THIS DUE TO API LIMITS**
+### 1. Install Dependencies
 
-**SCRAPING DATA FILES WERE NOT ENTIRELY CONSISTENT**:
-+ this affected downstream parsing
-+ `head -n 1 data/scraped/* | grep "Effect" | sort | uniq -c` returned 3 different kinds of headers, 5 files were effected
-+ fixed with `fixScrape.py`, now all headers are consistent
+Create a conda environment with:
 
+```bash
+conda create -f reqs.yaml
+conda activate reproduceCapstone
+```
 
-overlaps and why overlaps
+Make sure `bcftools` and `samtools` are in your PATH.
 
-lets focus on the top reported mutations 
+### 2. Run the Pipeline
+
+Run the entire workflow with:
+
+```bash
+bash reproduce.sh
+```
+
+This will:
+
+* Download and index the GRCh37 reference genome
+* Scrape and parse LOVD variant data
+* Format ClinVar and LOVD variants into unified VCFs
+* Normalize and annotate them
+* Merge, label, and produce analysis-ready data
+
+### 3. Run the Analysis
+
+After running the pipeline, open the Jupyter notebook:
+
+```bash
+jupyter notebook capstone.ipynb
+```
+
+This will generate all figures and tables used in the final report.
+
+---
+
+## 📈 Key Features
+
+* **Fully automated data retrieval and formatting**
+* **HGVS to VCF normalization with `biocommons.hgvs`**
+* **Variant consequence harmonization (manual label mapping)**
+* **ANNOVAR annotation with `refGene` + `dbNSFP v4.2a`**
+* **Visualization of mutation frequency, consequence, and spatial distribution**
+* **ECDF analysis of mutation reporting frequency**
+
+---
+
+## 📄 Citation
+
+If you use this pipeline or dataset, please cite:
+
+> Ali, L.B. (2025). *A Bioinformatics Overview of Publicly Available Fanconi Anemia Mutation Data*. Lebanese American University Capstone Project.
+
+---
+
+## 📬 Contact
+
+For questions or collaborations, please contact:
+📧 [lazo.bakhtiar@lau.edu.lb](mailto:lazo.bakhtiar@lau.edu.lb)
+
