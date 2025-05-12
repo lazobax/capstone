@@ -58,8 +58,10 @@ if [ ! -f "$FASTA" ]; then
     samtools faidx "$FASTA"
 fi
 
+
 # Process each gene
 for gene in "${GENES[@]}"; do
+
     chr="${gene_chr[$gene]}"
     echo "Processing $gene on chromosome $chr"
     # ClinVar to VCF
@@ -67,6 +69,9 @@ for gene in "${GENES[@]}"; do
         cut -f 2,7,19,26,32,33,34 | \
         awk -F'\t' -v OFS='\t' '{print $3, $5, $6, $7, $1, $2, $4}' \
         > "data/ClinVar_vcf/${gene}.vcf"
+      
+
+
     python3 scripts/addClinVarID.py ${gene}.vcf
 
     # LOVD scraping and parsing
@@ -74,6 +79,8 @@ for gene in "${GENES[@]}"; do
     python3 scripts/fixScrape.py "$gene"_variants_full.tsv
     python3 scripts/parse.py -L "data/scraped_adj/${gene}_variants_full.tsv" --chr "$chr" -o "data/parsed/${gene}.tsv"
     python3 scripts/hgvsToVCF.py "GRCh37" "data/parsed/${gene}.tsv"
+
+
 done
 
 # Reformating into valid, actual, VCF format
@@ -89,77 +96,108 @@ awk '{ printf("##contig=<ID=%s,length=%s>\n",$1,$2) }' \
 # 2) Prepare output directories
 mkdir -p VCF/LOVD VCF/CV
 
-# 3) Process every VCF in VCF_regular/LOVD and VCF_regular/CV
+
+
+logfile="lines.log"
+# Header: file, before, replaceCHROM, clean, bgzip, annotate, sort, index
+echo -e "file\tbefore\treplaceCHROM\tclean\tbgzip\tannotate\tsort\tindex" > "$logfile"
+
 for sub in LOVD CV; do
   for in_vcf in VCF_regular/${sub}/*.vcf; do
     base=$(basename "$in_vcf" .vcf)
-    out_vcf=VCF/${sub}/${base}.vcf
+    out_prefix="VCF/${sub}/${base}"
 
-    # a) Replace chr → contig names
-    python scripts/replaceCHROM.py "$in_vcf" "$out_vcf"
+    # 1) count before
+    cnt_before=$(grep -vc '^#' "$in_vcf")
 
-    # b) Compress with bgzip
-    bgzip -c "$out_vcf" > "${out_vcf}.gz"
+    # a) replaceCHR → contig names
+    python scripts/replaceCHROM.py "$in_vcf" "${out_prefix}.vcf"
+    cnt_replace=$(grep -vc '^#' "${out_prefix}.vcf")
 
-    # c) Inject contig headers
-    bcftools annotate \
-      --header-lines data/contigs.txt \
-      --rename-chrs utils/num2acc.txt \
-      -Oz -o "${out_vcf%.vcf}.contig.vcf.gz" \
-      "${out_vcf}.gz"
+    # b) clean up IUPAC ambigs / non-ACGTN / negative POS / REF mismatches
+    python scripts/removeIUPACambg.py \
+      "${out_prefix}.vcf" \
+      --clean "${out_prefix}.clean.vcf" \
+      --error "${out_prefix}.error.vcf" \
+      --mismatch "${out_prefix}.mismatch.vcf" \
+      --ref data/genome.fa
+    cnt_clean=$(grep -vc '^#' "${out_prefix}.clean.vcf")
 
-    # d) Sort and re-compress
+    # c) bgzip the cleaned VCF
+    bgzip -c "${out_prefix}.clean.vcf" > "${out_prefix}.vgz"
+    cnt_bgzip=$(gunzip -c "${out_prefix}.vgz" | grep -vc '^#')
+
+    # d) inject contig headers
+    bcftools reheader \
+      --fai data/genome.fa.fai \
+      -o "${out_prefix}.contig.vcf.gz" \
+      "${out_prefix}.vgz"
+    cnt_annotate=$(gunzip -c "${out_prefix}.contig.vcf.gz" | grep -vc '^#')
+
+    # e) sort & re-compress
     bcftools sort \
-      "${out_vcf%.vcf}.contig.vcf.gz" \
-      -Oz -o "${out_vcf%.vcf}.sorted.vcf.gz"
+      "${out_prefix}.contig.vcf.gz" \
+      -Oz -o "${out_prefix}.sorted.vcf.gz"
+    cnt_sort=$(gunzip -c "${out_prefix}.sorted.vcf.gz" | grep -vc '^#')
 
-    # e) Index
-    tabix -p vcf "${out_vcf%.vcf}.sorted.vcf.gz"
+
+    # f) index (final)
+    tabix -p vcf "${out_prefix}.sorted.vcf.gz"
+    cnt_index=$(bcftools view -H "${out_prefix}.sorted.vcf.gz" | wc -l)
+
+    # append results to log
+    echo -e "${sub}/${base}\t${cnt_before}\t${cnt_replace}\t${cnt_clean}\t${cnt_bgzip}\t${cnt_annotate}\t${cnt_sort}\t${cnt_index}" \
+      >> "$logfile"
   done
 done
+
+
+
 
 # 4) Concatenate all sorted VCFs into one uncompressed VCF
 bcftools concat -a -O v \
   VCF/LOVD/*.sorted.vcf.gz VCF/CV/*.sorted.vcf.gz \
-  > data/combined.vcf
+  > data/combined.vcf 
 
-#removes non-ATCGN bases and keeps them, non ATCGN bases are IUPAC ambiguity
+echo "AFTER CONCAT"
+
+echo $(cat data/combined.vcf | grep -cv "^#")
+
+
+# removes non-ATCGN bases and keeps them, non ATCGN bases are IUPAC ambiguity
 python scripts/removeIUPACambg.py
 
-# 1) bgzip & index the raw combined VCF
-bgzip -c data/combined.clean.vcf   > data/combined.clean.vcf.gz
-tabix -p vcf data/combined.clean.vcf.gz
-echo "zipped"
 
-# 2) Split multi-allelic sites into biallelic records
-bcftools norm -m -both \
-  data/combined.clean.vcf.gz \
-  -Oz -o data/combined.split.vcf.gz
-echo "normed"
 
-# 3) Left-align and trim indels against your reference
-bcftools norm -f data/genome.fa \
-  data/combined.split.vcf.gz \
-  -Oz -cw -o data/combined.normalized.vcf.gz
-echo "normed 2" 
-
-# 4) Index the normalized VCF
+bgzip -c data/combined.clean.vcf  > data/combined.clean.vcf.gz
+bcftools norm -m -both -f data/genome.fa \
+  -Oz -cw -o data/combined.normalized.vcf.gz \
+  data/combined.clean.vcf.gz
 tabix -p vcf data/combined.normalized.vcf.gz
+
+echo $(gunzip -c data/combined.normalized.vcf.gz | grep -cv "^#")
 
 
 
 # Downloading ANNOVAR and the refGene, dbnsfp42a databases
 # The following take some time. Especially dbnsfp42a, it's over 40Gb unzipped. 
-wget http://www.openbioinformatics.org/annovar/download/0wgxR2rIVP/annovar.latest.tar.gz
-tar -xvzf annovar.latest.tar.gz
-perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene annovar/humandb/
-perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar dbnsfp42a annovar/humandb/
+# wget http://www.openbioinformatics.org/annovar/download/0wgxR2rIVP/annovar.latest.tar.gz
+# tar -xvzf annovar.latest.tar.gz
+# perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar refGene annovar/humandb/
+# perl annovar/annotate_variation.pl -buildver hg19 -downdb -webfrom annovar dbnsfp42a annovar/humandb/
+# Rename both header and CHROM column without touching any records
+gunzip -c data/combined.normalized.vcf.gz \
+  | awk 'BEGIN{
+      FS=OFS="\t";
+      while(getline<"utils/acc2num.txt") map[$1]=$2
+    }
+    /^#/ { print; next }
+    { if(map[$1]) $1=map[$1]; print }
+  ' \
+  | bgzip -c > data/combined.normalized.num.vcf.gz \
+  && tabix -p vcf data/combined.normalized.num.vcf.gz
 
-bcftools annotate \
-      --rename-chrs utils/acc2num.txt \
-      -Oz -o data/combined.normalized.num.vcf.gz \
-      data/combined.normalized.vcf.gz
-
+echo $(gunzip -c data/combined.normalized.num.vcf.gz | grep -cv "^#")
 
 perl annovar/table_annovar.pl \
     data/combined.normalized.num.vcf.gz \
@@ -172,7 +210,42 @@ perl annovar/table_annovar.pl \
     -nastring . \
     -vcfinput
 
+gunzip data/combined.normalized.num.vcf
 mv data/combined.normalized.hg19_multianno.txt data/finalAnnot.tsv
 
 mkdir -p data/combined/
 mv data/combined.* data/combined/ 
+mv data/combined/combined.normalized.vcf data/finalVCF.vcf
+
+# 1) Download and prepare the chain file
+mkdir -p data
+wget -O data/19To38.chain.gz http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz
+gunzip -f data/19To38.chain.gz
+
+# 2) Download and index hg38 reference
+wget -O data/hg38.fa.gz http://hgdownload.cse.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
+gunzip -f data/hg38.fa.gz
+samtools faidx data/hg38.fa
+
+# # 4) Liftover your VCF
+CrossMap.py vcf \
+  data/19To38.chain \
+  data/finalVCF.num.vcf \
+  data/hg38.fa \
+  data/final.hg38.vcf
+
+# #failed to map 14
+
+bcftools reheader --fai data/hg38.fa.fai -o data/final.hg38.contig.vcf data/final.hg38.vcf
+
+awk 'BEGIN{OFS="\t"} \
+  /^#/ { print; next } \
+  ($1 ~ /^[0-9]+$/ || $1=="X" || $1=="Y") { $1 = "chr"$1 } \
+  { print }' \
+  data/final.hg38.contig.vcf > data/final.hg38.nums.vcf
+
+bgzip -c data/final.hg38.nums.vcf > data/final.hg38.nums.vcf.gz
+
+bcftools norm -m -both -f data/hg38.fa -Oz -cw -o data/final.hg38.normalized.vcf.gz data/final.hg38.nums.vcf.gz 
+
+
